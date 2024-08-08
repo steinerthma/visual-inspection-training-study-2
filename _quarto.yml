@@ -1,0 +1,14 @@
+project:
+  type: manuscript
+  output-dir: docs
+manuscript:
+  article: supplement.qmd
+
+execute:
+  freeze: auto
+  echo: true
+format:
+  html:
+    toc: true
+    page-layout: full
+    df-print: kable
