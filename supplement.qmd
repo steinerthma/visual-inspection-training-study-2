@@ -66,37 +66,36 @@ sample_table$fast <- dat_items %>%
   summarise(n = n()) %>%
   pull(2)
 
-#id_filter <- dat_subjects %>% 
-#  filter(!(Q2cc %in% 0:1 | Q3cc %in% 0:1)) %>%
-#  pull(id_subject)
+id_filter <- dat_subjects %>% 
+  filter(!(Q2cc %in% 0:1 | Q3cc %in% 0:1)) %>%
+  pull(id_subject)
 
-#dat_items <- filter(dat_items, id_subject %in% id_filter)
-#dat_subjects <- filter(dat_subjects, id_subject %in% id_filter)
+dat_items <- filter(dat_items, id_subject %in% id_filter)
+dat_subjects <- filter(dat_subjects, id_subject %in% id_filter)
 
-#sample_table$compliance <- dat_items %>% 
-#  group_by(id_subject, group) %>%
-#  summarise(n = n()) %>%
-#  group_by(group) %>%
-#  summarise(n = n()) %>%
-#  pull(2)
+sample_table$compliance <- dat_items %>% 
+  group_by(id_subject, group) %>%
+  summarise(n = n()) %>%
+  group_by(group) %>%
+  summarise(n = n()) %>%
+  pull(2)
 
 sample_table[3, 2] <- sum(sample_table[[2]], na.rm = TRUE)
 sample_table[3, 3] <- sum(sample_table[[3]], na.rm = TRUE)
-#sample_table[3, 4] <- sum(sample_table[[4]], na.rm = TRUE)
+sample_table[3, 4] <- sum(sample_table[[4]], na.rm = TRUE)
 sample_table[[1]] <- c("Control", "Training", "Total")
 ```
 
 Participants were excluded from the dataset when they had 20% or more fast responses. A fast response was defined as a response equal or less than 500ms.  
 
-Did not find the variable in the datafile:  
-(After the experiment, we asked the students if they worked through the experiment thoroughly on a four point scale in two questions. We excluded those that responded with "no" or "rather not".)
+After the experiment, we asked the students if they worked through the experiment thoroughly on a four point scale in two questions. We excluded those that responded with "no" or "rather not".
 
 ```{r}
 nice_table(
   sample_table,
   title = "Number of participants",
   file = TRUE,
-  spanner = list(n = 2:3),
+  spanner = list(n = 2:4),
   cols_label = list(
     group = "Group condition",
     fast = html("After removal of fast responders")#,
@@ -105,10 +104,11 @@ nice_table(
 )
 ```
 
-The majority of the data where collected at the University of Potsdam at the end of a lecture on inclusive education.
+All data where collected at the University of Potsdam at the end of a lecture on inclusive education.
 
 ```{r}
 #| label: place-data-collection
+#| eval: false
 
 dat_subjects %>% 
   count(group, uni) %>% 
@@ -139,8 +139,6 @@ dat_subjects |> select(semester, seminar_stats, wissen_regression, erfahrung_err
   nice_descriptives(auto_labels = TRUE, round = 2) |> as.data.frame() |>
   nice_table(file = TRUE)
 ```
-
-
 
 # Material
 
@@ -387,7 +385,7 @@ data.frame(
 ) |>
   nice_table(
     title = "Contrasts for interactions of time by condition", 
-    markdown = TRUE, file = TRUE
+    file = TRUE
   )
 ```
 
@@ -480,18 +478,18 @@ ggsave("fig-linediagram.png")
 
 dat <- dat_items %>% 
   filter(question == "certainty") %>%
-  mutate(response = scale(response)) %>%
+  mutate(response_std = scale(response)) %>%
   rename(Condition = group, Effect = effect, Time = time)
 
 model_full <- lmer(
-  response ~ Time * Condition * Effect + 
+  response_std ~ Time * Condition * Effect + 
     (1|id_subject) + (1|id_subject:Time) + (1|id_subject:Effect), 
   data = dat, 
   na.action = na.omit
 )
 
 model_no_effect_condition <- lmer(
-  response ~ Time * Condition + 
+  response_std ~ Time * Condition + 
     (1|id_subject) + (1|id_subject:Time), 
   data = dat, 
   na.action = na.omit
@@ -534,11 +532,13 @@ data.frame(
   Effect = c("None", "Trend", "Slope", "Trend & Slope"),
   Statistic = c(interaction_stat(1), interaction_stat(2), interaction_stat(3), interaction_stat(4))
 ) |>
-  nice_table(title = "Contrasts for interactions of time by condition for confidence of judgement ratings", markdown = TRUE, file = TRUE)
+  nice_table(title = "Contrasts for interactions of time by condition for confidence of judgement ratings", file = TRUE)
 ```
 
 
 ### Estimated marginal means confidenc of judgement
+
+#### standardized
 
 ```{r}
 marginal_means <- emmeans(
@@ -619,3 +619,92 @@ ggsave("fig-linediagram-confidence.png")
 
 ```
 
+#### Non standardized
+
+```{r}
+model_full <- lmer(
+  response ~ Time * Condition * Effect + 
+    (1|id_subject) + (1|id_subject:Time) + (1|id_subject:Effect), 
+  data = dat, 
+  na.action = na.omit
+)
+```
+
+```{r}
+marginal_means <- emmeans(
+  model_full,
+  c("Time", "Effect", "Condition"), 
+  pbkrtest.limit = 11000,
+  lmerTest.limit = 11000
+)
+
+table_pre_post <- marginal_means |> 
+  summary()  |> 
+  as.data.frame()  |> 
+  mutate(across(where(is.numeric), ~round(.x, 2)))  |> 
+  select(Condition, Effect, Time, emmean) %>%
+  pivot_wider(names_from = "Time", values_from = "emmean")  |> 
+  mutate(Difference = Post-Pre)
+
+table_contrast <- marginal_means |> 
+  pairs() |> 
+  as.data.frame() |> 
+    filter(contrast %in% c(
+    "Pre None Control - Post None Control",
+    "Pre None Training - Post None Training",
+    "Pre Trend Control - Post Trend Control",
+    "Pre Trend Training - Post Trend Training",
+    "Pre Slope Control - Post Slope Control",
+    "Pre Slope Training - Post Slope Training",
+    "Pre Trend & Slope Control - Post Trend & Slope Control",
+    "Pre Trend & Slope Training - Post Trend & Slope Training"
+  )) %>% 
+  mutate(
+    across(where(is.numeric), ~round(.x, 2))
+  ) %>%
+  rename("t ratio" = t.ratio, p = p.value) %>% 
+  select(-1, -estimate, -df)
+
+table_pre_post <- cbind(table_pre_post, table_contrast)
+
+nice_table(
+  table_pre_post,
+  file = "tab-posthoc-confidence-not-std.docx",
+  title = "Pre/post post-hoc contrasts of confidence of judgement raitings (0-3)"
+)
+
+```
+
+```{r}
+means <- as.data.frame(marginal_means)
+
+means %>%
+ggplot(aes(x = Time, y = emmean)) +
+  geom_line(
+    aes(color = Effect, group = Effect, linetype = Effect),
+    position = position_dodge(width = 0.2)
+  ) + 
+  geom_point(
+    aes(group = Effect),
+    position = position_dodge(width = 0.2)
+  ) + 
+  geom_errorbar(
+    aes(ymin = lower.CL, ymax = upper.CL), 
+    width = 0.2,
+    position = position_dodge2(0.2)
+  ) +  
+  facet_grid(cols = vars(Condition)) +
+  ylim(c(0, 3)) +
+  theme(
+    panel.background = element_rect(fill = "white"),
+    legend.key  = element_rect(fill = "white"),
+    axis.line.x = element_line(colour = "black", linewidth = 1),
+    axis.line.y = element_line(colour = "black", linewidth = 1)
+  ) + 
+  xlab("Time") +
+  ylab("Rating (0-3)") +
+  ggtitle("Estimated marginal means for confidence of judgement ratings")
+
+ggsave("fig-linediagram-confidence-not-std.png")
+
+```
