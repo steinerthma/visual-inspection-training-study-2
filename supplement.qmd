@@ -20,7 +20,7 @@ library(emmeans)
 library(gt)
 
 if (!("wmisc" %in% installed.packages())) devtools::install_github("jazznbass/wmisc")
-if (!packageDate("wmisc") >= as.Date("2024-06-18")) devtools::install_github("jazznbass/wmisc")
+if (!packageDate("wmisc") >= as.Date("2024-08-09")) devtools::install_github("jazznbass/wmisc")
 library(wmisc)
 
 dat_items <- readRDS(file.path("data", "data-items-clean.rds"))
@@ -132,10 +132,10 @@ dat_subjects %>%
 
 nice_frequencies(dat_subjects$age)
 nice_frequencies(dat_subjects$gesch)
-nice_frequencies(dat_subjects$fach, show_missing = FALSE)
-nice_frequencies(dat_subjects$mathe)
+#nice_frequencies(dat_subjects$fach, show_missing = FALSE)
+nice_frequencies(dat_subjects$group, show_missing = FALSE)
 
-dat_subjects |> select(1:16, -rt, -gesch, -age) |> 
+dat_subjects |> select(semester, seminar_stats, wissen_regression, erfahrung_error, erfahrung_lvd, erfahrung_lehre) |> 
   nice_descriptives(auto_labels = TRUE, round = 2) |> as.data.frame() |>
   nice_table(file = TRUE)
 ```
@@ -370,7 +370,7 @@ nice_regression_table(
 interaction_stat <- function(ref) {
   model <- update(model2, contrasts = list(Effect = contr.treatment(4, base = ref)))
   res <- coef(summary(model))["TimePost:ConditionTraining",, drop=FALSE]
-  paste0("OR = ", round(exp(res[1,1]), 2), ", *z* = ", round(res[1,3], 2), ", *p* = ", nice_p(res[1,4]))
+  paste0("*OR* = ", round(exp(res[1,1]), 2), ", *z* = ", round(res[1,3], 2), ", *p* = ", nice_p(res[1,4]))
 }
 
 ```
@@ -385,7 +385,10 @@ data.frame(
   Statistic = c(interaction_stat(1), interaction_stat(2), interaction_stat(3), interaction_stat(4)),
   check.names = FALSE
 ) |>
-  nice_table(title = "Contrasts for interactions of time by condition", file = TRUE)
+  nice_table(
+    title = "Contrasts for interactions of time by condition", 
+    markdown = TRUE, file = TRUE
+  )
 ```
 
 ### Estimated marginal means
@@ -531,7 +534,7 @@ data.frame(
   Effect = c("None", "Trend", "Slope", "Trend & Slope"),
   Statistic = c(interaction_stat(1), interaction_stat(2), interaction_stat(3), interaction_stat(4))
 ) |>
-  nice_table(title = "Contrasts for interaction of time by condition for confidence of judgement ratings", file = TRUE)
+  nice_table(title = "Contrasts for interactions of time by condition for confidence of judgement ratings", markdown = TRUE, file = TRUE)
 ```
 
 
@@ -601,7 +604,7 @@ ggplot(aes(x = Time, y = emmean)) +
     position = position_dodge2(0.2)
   ) +  
   facet_grid(cols = vars(Condition)) +
-  ylim(c(-1,1)) +
+  ylim(c(-0.5,0.5)) +
   theme(
     panel.background = element_rect(fill = "white"),
     legend.key  = element_rect(fill = "white"),
